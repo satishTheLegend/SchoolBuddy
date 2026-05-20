@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
@@ -11,6 +11,7 @@ export default function SignUp() {
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const signUp = useAuth((s) => s.signUpWithEmail);
+  const router = useRouter();
 
   const submit = async () => {
     if (!email || !password) return;
@@ -21,9 +22,13 @@ export default function SignUp() {
     setSubmitting(true);
     try {
       await signUp(email.trim(), password);
+      // If the Supabase project has email confirmation disabled,
+      // signUp returns a session and AuthGate will route to onboarding.
+      // If confirmation is required, send the user back to sign-in.
       Alert.alert(
-        'Check your inbox',
-        'We sent you a confirmation email. Verify, then sign in.',
+        'Account created',
+        'If we sent a confirmation email, verify it first. Otherwise you can sign in now.',
+        [{ text: 'OK', onPress: () => router.replace('/(auth)/sign-in') }],
       );
     } catch (e) {
       Alert.alert('Sign up failed', (e as Error).message);

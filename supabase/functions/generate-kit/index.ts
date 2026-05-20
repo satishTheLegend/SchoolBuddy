@@ -143,15 +143,29 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Cards — ensure a deck
+    // Cards — ensure a deck. Find-or-create the user's "Inbox" deck so
+    // repeat captures don't pile up into N copies of the same deck.
     let deckId = capture.deck_id;
     if (!deckId) {
-      const { data: deck } = await adminClient
+      const { data: existing } = await adminClient
         .from('decks')
-        .insert({ user_id: capture.user_id, title: 'Inbox' })
         .select('id')
-        .single();
-      deckId = deck?.id;
+        .eq('user_id', capture.user_id)
+        .eq('title', 'Inbox')
+        .eq('archived', false)
+        .maybeSingle();
+
+      if (existing?.id) {
+        deckId = existing.id;
+      } else {
+        const { data: deck } = await adminClient
+          .from('decks')
+          .insert({ user_id: capture.user_id, title: 'Inbox' })
+          .select('id')
+          .single();
+        deckId = deck?.id;
+      }
+
       if (deckId) {
         await adminClient
           .from('captures')

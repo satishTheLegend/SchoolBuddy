@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { Card } from '@/types';
 import { getDueCards, recordReview, upsertCard } from '@/lib/db/client';
+import { ensureFreshCards } from '@/lib/db/scoped-sync';
+import { recordReviewToday } from '@/lib/streak';
 import {
   DEFAULT_PARAMETERS,
   FsrsCard,
@@ -41,6 +43,15 @@ export const useReview = create<ReviewState>((set, get) => ({
 
   load: async (userId, deckId) => {
     set({ loading: true });
+    // Pull freshly generated cards (post-capture) before reading the
+    // local queue, otherwise newly created cards sit only in Postgres
+    // and the user sees "Nothing to review".
+    try {
+      await ensureFreshCards(userId, deckId);
+    } catch (e) {
+      // Offline is fine — we still have whatever is in SQLite.
+      console.warn('ensureFreshCards failed (will use local cache)', e);
+    }
     const cards = await getDueCards(userId, deckId, 200);
     set({
       queue: cards.slice(1),
@@ -74,6 +85,9 @@ export const useReview = create<ReviewState>((set, get) => ({
     };
 
     await upsertCard(updated, true);
+    // Best-effort streak update — same-day reviews no-op so it's safe
+    // to call on every rating.
+    recordReviewToday().catch(() => {});
     await recordReview({
       cardId: current.id,
       rating,

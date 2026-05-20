@@ -6,14 +6,17 @@ import { useRouter } from 'expo-router';
 import { Card, CardSubtitle, CardTitle } from '@/components/Card';
 import { Button } from '@/components/Button';
 import { EmptyState } from '@/components/EmptyState';
+import { StreakBadge } from '@/components/StreakBadge';
 import { useAuth } from '@/stores/auth';
 import { countDue } from '@/lib/db/client';
 import { fullSync } from '@/lib/db/sync';
+import { getStreak } from '@/lib/streak';
 
 export default function TodayScreen() {
   const user = useAuth((s) => s.user);
   const router = useRouter();
   const [dueCount, setDueCount] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = async () => {
@@ -21,8 +24,9 @@ export default function TodayScreen() {
     setRefreshing(true);
     try {
       await fullSync(user.id);
-      const n = await countDue(null);
+      const [n, s] = await Promise.all([countDue(null), getStreak()]);
       setDueCount(n);
+      setStreak(s.count);
     } catch (e) {
       console.warn('refresh failed', e);
     } finally {
@@ -47,11 +51,14 @@ export default function TodayScreen() {
           />
         }
       >
-        <View className="mb-6">
-          <Text className="text-ink-muted text-sm mb-1">Today</Text>
-          <Text className="text-ink text-3xl font-bold">
-            {dueCount > 0 ? `${dueCount} cards due` : 'All caught up'}
-          </Text>
+        <View className="mb-6 flex-row items-start justify-between">
+          <View>
+            <Text className="text-ink-muted text-sm mb-1">Today</Text>
+            <Text className="text-ink text-3xl font-bold">
+              {dueCount > 0 ? `${dueCount} cards due` : 'All caught up'}
+            </Text>
+          </View>
+          {streak > 0 && <StreakBadge count={streak} />}
         </View>
 
         {dueCount > 0 ? (

@@ -7,6 +7,7 @@ import { Button } from '@/components/Button';
 import { Card as UICard, CardSubtitle, CardTitle } from '@/components/Card';
 import { useAuth } from '@/stores/auth';
 import { getDeckCards, countDue } from '@/lib/db/client';
+import { ensureFreshCards } from '@/lib/db/scoped-sync';
 import { Card } from '@/types';
 
 export default function DeckDetail() {
@@ -19,6 +20,11 @@ export default function DeckDetail() {
   useEffect(() => {
     if (!user || !id) return;
     (async () => {
+      try {
+        await ensureFreshCards(user.id, id);
+      } catch (e) {
+        console.warn('ensureFreshCards failed', e);
+      }
       const cs = await getDeckCards(user.id, id);
       setCards(cs);
       setDue(await countDue(id));

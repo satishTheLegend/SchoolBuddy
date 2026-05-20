@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/Button';
 import { useAuth } from '@/stores/auth';
+import { signInWithApple, signInWithGoogle } from '@/lib/oauth';
 
 export default function SignIn() {
   const [email, setEmail] = useState('');
@@ -65,6 +66,33 @@ export default function SignIn() {
           </View>
 
           <Button label="Sign in" onPress={submit} loading={submitting} size="lg" />
+
+          <View className="flex-row items-center my-6 gap-3">
+            <View className="flex-1 h-px bg-bg-elevated" />
+            <Text className="text-ink-dim text-xs">or</Text>
+            <View className="flex-1 h-px bg-bg-elevated" />
+          </View>
+
+          <View className="gap-3">
+            <Button
+              label="Continue with Apple"
+              variant="secondary"
+              onPress={() => {
+                signInWithApple().catch((e) =>
+                  Alert.alert('Apple sign-in failed', (e as Error).message),
+                );
+              }}
+            />
+            <Button
+              label="Continue with Google"
+              variant="secondary"
+              onPress={() => {
+                signInWithGoogle().catch((e) =>
+                  Alert.alert('Google sign-in failed', (e as Error).message),
+                );
+              }}
+            />
+          </View>
 
           <View className="flex-row justify-center mt-6">
             <Text className="text-ink-muted">New here? </Text>

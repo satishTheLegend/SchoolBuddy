@@ -1,5 +1,6 @@
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 
 import { Button } from '@/components/Button';
 import { Card, CardSubtitle, CardTitle } from '@/components/Card';
@@ -7,13 +8,14 @@ import { useAuth } from '@/stores/auth';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
+  const router = useRouter();
 
   return (
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <ScrollView contentContainerClassName="px-4 py-6 gap-4">
         <Text className="text-ink text-3xl font-bold mb-4">You</Text>
 
-        <Card>
+        <Card onPress={() => router.push('/account')}>
           <CardTitle>Signed in as</CardTitle>
           <CardSubtitle>{user?.email}</CardSubtitle>
         </Card>
@@ -22,13 +24,21 @@ export default function ProfileScreen() {
           <CardTitle>Free plan</CardTitle>
           <CardSubtitle>10 captures / month • Unlimited review</CardSubtitle>
           <View className="mt-3">
-            <Button label="Upgrade to Pro · $4.99/mo" onPress={() => {}} />
+            <Button
+              label="Upgrade to Pro · $4.99/mo"
+              onPress={() => router.push('/paywall')}
+            />
           </View>
         </Card>
 
-        <Card>
+        <Card onPress={() => router.push('/settings/notifications')}>
           <CardTitle>Study habit</CardTitle>
-          <CardSubtitle>Daily reminder, 8:00 PM</CardSubtitle>
+          <CardSubtitle>Daily reminder · tap to configure</CardSubtitle>
+        </Card>
+
+        <Card onPress={() => router.push('/search')}>
+          <CardTitle>Search</CardTitle>
+          <CardSubtitle>Find across all your notes and cards</CardSubtitle>
         </Card>
 
         <View className="mt-6">

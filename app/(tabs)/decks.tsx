@@ -22,11 +22,19 @@ export default function DecksScreen() {
     <SafeAreaView className="flex-1 bg-bg" edges={['top']}>
       <View className="px-4 pt-6 pb-3 flex-row justify-between items-center">
         <Text className="text-ink text-3xl font-bold">Decks</Text>
-        <Button
-          label="Snap"
-          size="sm"
-          onPress={() => router.push('/capture')}
-        />
+        <View className="flex-row gap-2">
+          <Button
+            label="Search"
+            size="sm"
+            variant="secondary"
+            onPress={() => router.push('/search')}
+          />
+          <Button
+            label="Snap"
+            size="sm"
+            onPress={() => router.push('/capture')}
+          />
+        </View>
       </View>
 
       {loading && decks.length === 0 ? (

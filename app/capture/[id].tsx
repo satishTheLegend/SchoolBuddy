@@ -20,7 +20,7 @@ import type {
   Summary,
 } from '@/types';
 
-type Phase = 'extracting' | 'generating' | 'ready' | 'failed';
+type Phase = 'pending' | 'extracting' | 'generating' | 'ready' | 'failed';
 
 export default function CaptureDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -101,7 +101,10 @@ export default function CaptureDetail() {
           filter: `capture_id=eq.${id}`,
         },
         (payload) => {
-          setCards((prev) => [...prev, mapCard(payload.new as Record<string, unknown>)]);
+          const next = mapCard(payload.new as Record<string, unknown>);
+          setCards((prev) =>
+            prev.some((c) => c.id === next.id) ? prev : [...prev, next],
+          );
         },
       )
       .subscribe();
@@ -179,7 +182,7 @@ export default function CaptureDetail() {
         </Card>
 
         {phase === 'ready' && cards.length > 0 && (
-          <View className="mt-2">
+          <View className="mt-2 gap-3">
             <Button
               label="Review these cards now"
               size="lg"
@@ -188,6 +191,16 @@ export default function CaptureDetail() {
                   router.replace(`/review/${capture.deckId}`);
                 }
               }}
+            />
+            <Button
+              label="Ask a follow-up"
+              variant="secondary"
+              onPress={() => router.push(`/ask/${id}`)}
+            />
+            <Button
+              label="Edit OCR text"
+              variant="ghost"
+              onPress={() => router.push(`/capture/${id}_edit`)}
             />
           </View>
         )}
@@ -198,6 +211,7 @@ export default function CaptureDetail() {
 
 function PhaseBadge({ phase }: { phase: Phase }) {
   const map: Record<Phase, { label: string; color: string }> = {
+    pending: { label: 'Queued', color: 'bg-ink-dim' },
     extracting: { label: 'Reading', color: 'bg-warning' },
     generating: { label: 'Generating', color: 'bg-accent' },
     ready: { label: 'Ready', color: 'bg-success' },

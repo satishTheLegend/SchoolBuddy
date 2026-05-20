@@ -1,5 +1,5 @@
 import '../global.css';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { View, ActivityIndicator } from 'react-native';
 
 import { useAuth } from '@/stores/auth';
 import { initDb } from '@/lib/db/client';
+import { hasCompletedOnboarding } from '@/lib/onboarding';
+import { ToastRoot } from '@/components/Toast';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -18,21 +20,32 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const { session, loading, init } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
     init();
     initDb().catch((e) => console.warn('SQLite init failed', e));
+    hasCompletedOnboarding().then(setOnboarded).catch(() => setOnboarded(true));
   }, [init]);
 
   useEffect(() => {
-    if (loading) return;
-    const inAuthGroup = segments[0] === '(auth)';
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/sign-in');
-    } else if (session && inAuthGroup) {
+    if (loading || onboarded === null) return;
+    const group = segments[0];
+    const inAuth = group === '(auth)';
+    const inOnboarding = group === 'onboarding';
+
+    if (!session) {
+      if (!inAuth) router.replace('/(auth)/sign-in');
+      return;
+    }
+    if (!onboarded) {
+      if (!inOnboarding) router.replace('/onboarding/welcome');
+      return;
+    }
+    if (inAuth || inOnboarding) {
       router.replace('/(tabs)');
     }
-  }, [session, loading, segments, router]);
+  }, [session, loading, onboarded, segments, router]);
 
   if (loading) {
     return (
@@ -53,6 +66,7 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#0B0F19' } }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="(auth)" />
+              <Stack.Screen name="onboarding" />
               <Stack.Screen
                 name="capture/[id]"
                 options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
@@ -66,7 +80,19 @@ export default function RootLayout() {
                 options={{ presentation: 'fullScreenModal' }}
               />
               <Stack.Screen name="deck/[id]" />
+              <Stack.Screen name="ask/[captureId]" />
+              <Stack.Screen name="card/[id]" />
+              <Stack.Screen name="search" />
+              <Stack.Screen
+                name="paywall"
+                options={{ presentation: 'modal' }}
+              />
+              <Stack.Screen name="account/index" />
+              <Stack.Screen name="settings/notifications" />
+              <Stack.Screen name="capture/multi" />
+              <Stack.Screen name="capture/[id]_edit" />
             </Stack>
+            <ToastRoot />
           </AuthGate>
           <StatusBar style="light" />
         </QueryClientProvider>

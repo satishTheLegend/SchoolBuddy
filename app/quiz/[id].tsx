@@ -54,11 +54,10 @@ export default function QuizScreen() {
   const q = quiz.questions[idx];
   const isLast = idx === quiz.questions.length - 1;
 
-  const score = quiz.questions.reduce((acc, qq) => {
-    const a = answers[qq.id]?.trim().toLowerCase();
-    if (!a) return acc;
-    return acc + (a === qq.answer.trim().toLowerCase() ? 1 : 0);
-  }, 0);
+  const score = quiz.questions.reduce(
+    (acc, qq) => acc + (isCorrect(qq, answers[qq.id]) ? 1 : 0),
+    0,
+  );
 
   const submit = async () => {
     setSubmitted(true);
@@ -84,8 +83,7 @@ export default function QuizScreen() {
           </Text>
           {quiz.questions.map((qq) => {
             const ans = (answers[qq.id] ?? '').trim();
-            const correct =
-              ans.toLowerCase() === qq.answer.trim().toLowerCase();
+            const correct = isCorrect(qq, ans);
             return (
               <View
                 key={qq.id}
@@ -190,5 +188,24 @@ function scoreLabel(pct: number): string {
   if (pct >= 0.8) return 'Strong. The misses become tomorrow’s cards.';
   if (pct >= 0.5) return 'Good effort. Review the explanations below.';
   return 'Re-read the source material and try again.';
+}
+
+// Models may return MCQ answers as a letter ("A"), the full option text,
+// or "A) full text". Accept any of these against the user's selection.
+function isCorrect(q: Quiz['questions'][number], userAnswer: string | undefined): boolean {
+  if (!userAnswer) return false;
+  const a = userAnswer.trim().toLowerCase();
+  const expected = q.answer.trim().toLowerCase();
+  if (a === expected) return true;
+  if (q.type === 'mcq' && q.options) {
+    const idx = q.options.findIndex((o) => o.trim().toLowerCase() === a);
+    if (idx >= 0) {
+      const letter = String.fromCharCode(65 + idx).toLowerCase();
+      if (letter === expected) return true;
+      // expected might be "B) something" or "B. something"
+      if (expected.startsWith(letter + ')') || expected.startsWith(letter + '.')) return true;
+    }
+  }
+  return false;
 }
 

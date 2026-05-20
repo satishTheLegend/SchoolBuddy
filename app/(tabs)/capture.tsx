@@ -113,10 +113,10 @@ export default function CaptureScreen() {
           </Pressable>
 
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => router.push('/capture/multi')}
             className="bg-bg-card/90 rounded-full w-14 h-14 items-center justify-center"
           >
-            <Text className="text-ink text-xs">Close</Text>
+            <Text className="text-ink text-xs">Multi</Text>
           </Pressable>
         </View>
       </SafeAreaView>
