@@ -121,7 +121,10 @@ export async function pushDirty(): Promise<number> {
     const { data: session } = await supabase.auth.getSession();
     const userId = session.session?.user.id;
     if (userId) {
+      // Send the local queue id as the remote PK so retries after a
+      // partial failure don't insert duplicates.
       const rows = unsynced.map((r) => ({
+        id: r.id,
         card_id: r.card_id,
         user_id: userId,
         rating: r.rating,
@@ -132,7 +135,9 @@ export async function pushDirty(): Promise<number> {
         difficulty_after: r.difficulty_after,
         reviewed_at: r.reviewed_at,
       }));
-      const { error } = await supabase.from('reviews').insert(rows);
+      const { error } = await supabase
+        .from('reviews')
+        .upsert(rows, { onConflict: 'id', ignoreDuplicates: true });
       if (!error) {
         for (const r of unsynced) {
           await db.runAsync(
