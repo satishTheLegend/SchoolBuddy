@@ -2,35 +2,25 @@
 // generate-kit edge function, and subscribe to progressive updates.
 
 import * as FileSystem from 'expo-file-system';
-import * as ImageManipulator from 'expo-image-manipulator';
 import { supabase, invokeFn } from './supabase';
+import { prepareForUpload } from './image-prep';
+import { track } from './analytics';
 import type { Capture, Card, Summary, Quiz } from '@/types';
 
 const STORAGE_BUCKET = 'captures';
-const MAX_DIMENSION = 1600;
 
-// Compress + downscale the photo before upload. Vision token cost scales
-// with megapixels — keeping the longest side at ~1600px is a good balance
-// between OCR accuracy and cost.
-export async function prepareImage(localUri: string): Promise<{
-  uri: string;
-  mime: string;
-}> {
-  const result = await ImageManipulator.manipulateAsync(
-    localUri,
-    [{ resize: { width: MAX_DIMENSION } }],
-    { compress: 0.8, format: ImageManipulator.SaveFormat.JPEG },
-  );
-  return { uri: result.uri, mime: 'image/jpeg' };
+export interface UploadResult {
+  storagePath: string;
+  captureId: string;
 }
 
 export async function uploadCapture(
   userId: string,
   localUri: string,
-): Promise<{ storagePath: string; captureId: string }> {
-  const { uri, mime } = await prepareImage(localUri);
+): Promise<UploadResult> {
+  const prepared = await prepareForUpload(localUri);
 
-  // Generate a server-side ID by inserting an empty capture row first.
+  // Reserve a server-side capture id by inserting an empty row.
   const { data: created, error: createErr } = await supabase
     .from('captures')
     .insert({ user_id: userId, status: 'pending' })
@@ -41,20 +31,40 @@ export async function uploadCapture(
   const captureId = created.id as string;
   const storagePath = `${userId}/${captureId}.jpg`;
 
-  const fileBytes = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const blob = base64ToBlob(fileBytes, mime);
+  // Get a fresh access token for the Storage REST endpoint. Using
+  // FileSystem.uploadAsync streams the file from disk so we don't blow
+  // memory on large captures.
+  const { data: session } = await supabase.auth.getSession();
+  const accessToken = session.session?.access_token;
+  if (!accessToken) throw new Error('Not signed in');
 
-  const { error: upErr } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(storagePath, blob, { contentType: mime, upsert: true });
-  if (upErr) throw upErr;
+  const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+  const uploadUrl = `${supabaseUrl}/storage/v1/object/${STORAGE_BUCKET}/${storagePath}`;
+
+  const uploadRes = await FileSystem.uploadAsync(uploadUrl, prepared.uri, {
+    httpMethod: 'POST',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': prepared.mime,
+      'x-upsert': 'true',
+    },
+  });
+
+  if (uploadRes.status >= 300) {
+    throw new Error(`Upload failed: ${uploadRes.status} ${uploadRes.body}`);
+  }
 
   await supabase
     .from('captures')
     .update({ image_url: storagePath })
     .eq('id', captureId);
+
+  track('capture_uploaded', {
+    width: prepared.width,
+    height: prepared.height,
+    size_kb: Math.round(prepared.size / 1024),
+  });
 
   return { storagePath, captureId };
 }
@@ -63,8 +73,6 @@ export async function generateKit(captureId: string): Promise<void> {
   await invokeFn('generate-kit', { captureId });
 }
 
-// Subscribe to progressive updates for a capture.
-// Cleanup is the caller's responsibility (call the returned unsubscribe).
 export function subscribeToKit(
   captureId: string,
   handlers: {
@@ -144,13 +152,4 @@ function mapCapture(row: Record<string, unknown>): Capture {
     errorMessage: (row.error_message as string) ?? null,
     createdAt: row.created_at as string,
   };
-}
-
-function base64ToBlob(base64: string, mime: string): Blob {
-  const byteChars = atob(base64);
-  const byteNumbers = new Array(byteChars.length);
-  for (let i = 0; i < byteChars.length; i++) {
-    byteNumbers[i] = byteChars.charCodeAt(i);
-  }
-  return new Blob([new Uint8Array(byteNumbers)], { type: mime });
 }

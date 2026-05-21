@@ -11,6 +11,11 @@ import { useAuth } from '@/stores/auth';
 import { initDb } from '@/lib/db/client';
 import { hasCompletedOnboarding } from '@/lib/onboarding';
 import { ToastRoot } from '@/components/Toast';
+import { initAnalytics, identify, reset as resetAnalytics } from '@/lib/analytics';
+import {
+  getDailyReviewSettings,
+  scheduleDailyReview,
+} from '@/lib/notifications';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -26,7 +31,24 @@ function AuthGate({ children }: { children: React.ReactNode }) {
     init();
     initDb().catch((e) => console.warn('SQLite init failed', e));
     hasCompletedOnboarding().then(setOnboarded).catch(() => setOnboarded(true));
+    initAnalytics().catch((e) => console.warn('analytics init failed', e));
   }, [init]);
+
+  // Re-sync analytics identity and re-schedule the daily notification
+  // each time the session changes.
+  useEffect(() => {
+    if (session?.user) {
+      identify(session.user.id, { email: session.user.email });
+      // Honour any saved daily-review schedule the user set previously.
+      getDailyReviewSettings()
+        .then((s) => {
+          if (s.enabled) scheduleDailyReview({ hour: s.hour, minute: s.minute });
+        })
+        .catch(() => {});
+    } else {
+      resetAnalytics();
+    }
+  }, [session?.user?.id]);
 
   useEffect(() => {
     if (loading || onboarded === null) return;
@@ -90,7 +112,9 @@ export default function RootLayout() {
               <Stack.Screen name="account/index" />
               <Stack.Screen name="settings/notifications" />
               <Stack.Screen name="capture/multi" />
+              <Stack.Screen name="capture/paste" />
               <Stack.Screen name="capture/[id]_edit" />
+              <Stack.Screen name="(auth)/confirm" />
             </Stack>
             <ToastRoot />
           </AuthGate>

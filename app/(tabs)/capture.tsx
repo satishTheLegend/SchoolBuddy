@@ -118,6 +118,12 @@ export default function CaptureScreen() {
           >
             <Text className="text-ink text-xs">Multi</Text>
           </Pressable>
+          <Pressable
+            onPress={() => router.push('/capture/paste')}
+            className="bg-bg-card/90 rounded-full w-14 h-14 items-center justify-center"
+          >
+            <Text className="text-ink text-xs">Paste</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     </View>

@@ -27,7 +27,7 @@ export default function DeckDetail() {
       }
       const cs = await getDeckCards(user.id, id);
       setCards(cs);
-      setDue(await countDue(id));
+      setDue(await countDue(user.id, id));
     })();
   }, [user?.id, id]);
 

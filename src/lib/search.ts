@@ -3,7 +3,7 @@
 // that embeds the user's query (same model as ingestion) and runs a
 // pgvector cosine-similarity query against `public.embeddings`.
 
-import { supabase } from './supabase';
+import { supabase, invokeFn } from './supabase';
 import type { Card, Capture } from '@/types';
 
 function escapeIlike(query: string): string {
@@ -92,26 +92,37 @@ export async function searchCaptures(
 }
 
 export interface SemanticHit {
-  captureId: string;
+  ownerTable: 'captures' | 'cards' | 'summaries';
+  ownerId: string;
   snippet: string;
-  score: number;
+  similarity: number;
 }
 
 /**
- * Semantic search stub.
- *
- * Not yet wired. When implemented, this will call an edge function
- * (e.g. `search-semantic`) that:
- *   1. Embeds `query` with the same model used at ingestion time.
- *   2. Runs a pgvector cosine-similarity query against
- *      `public.embeddings` scoped to `user_id`.
- *   3. Returns the top `limit` hits with capture id, snippet, and score.
+ * Semantic search via the `semantic-search` edge function. The function
+ * embeds the query with the same model used at ingestion (Gemini
+ * text-embedding-004) and runs cosine similarity through the
+ * `match_embeddings` RPC against the calling user's embeddings.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export async function semanticSearch(
-  _userId: string,
-  _query: string,
-  _limit: number,
+  query: string,
+  limit = 20,
+  ownerTable?: 'captures' | 'cards' | 'summaries',
 ): Promise<SemanticHit[]> {
-  throw new Error('not yet wired');
+  const trimmed = query.trim();
+  if (!trimmed) return [];
+  const res = await invokeFn<{
+    results?: Array<{
+      owner_table: SemanticHit['ownerTable'];
+      owner_id: string;
+      content: string;
+      similarity: number;
+    }>;
+  }>('semantic-search', { query: trimmed, limit, ownerTable });
+  return (res?.results ?? []).map((r) => ({
+    ownerTable: r.owner_table,
+    ownerId: r.owner_id,
+    snippet: r.content?.slice(0, 200) ?? '',
+    similarity: r.similarity,
+  }));
 }

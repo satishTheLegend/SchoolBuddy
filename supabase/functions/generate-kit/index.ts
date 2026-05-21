@@ -21,6 +21,7 @@ import {
   geminiText,
   geminiVision,
 } from '../_shared/ai.ts';
+import { geminiEmbed, sha256Hex } from '../_shared/embeddings.ts';
 import {
   FLASHCARDS_PROMPT,
   OCR_INSTRUCTION,
@@ -81,6 +82,21 @@ Deno.serve(async (req: Request) => {
 
     if (captureErr || !capture) {
       return json({ error: 'Capture not found' }, 404);
+    }
+
+    // Enforce free-tier monthly capture limit. The SQL function raises
+    // on overage; we surface a 402-style error so the client can route
+    // to the paywall. (Idempotent: only counts once per capture via
+    // the capture's status — pending captures haven't been counted.)
+    if (capture.status === 'pending') {
+      const { error: quotaErr } = await adminClient.rpc(
+        'increment_captures',
+        { p_user_id: capture.user_id },
+      );
+      if (quotaErr) {
+        await markFailed(adminClient, captureId, quotaErr.message);
+        return json({ error: 'quota_exceeded', detail: quotaErr.message }, 402);
+      }
     }
 
     // Mark as extracting
@@ -212,6 +228,12 @@ Deno.serve(async (req: Request) => {
       .update({ status: 'ready' })
       .eq('id', captureId);
 
+    // Best-effort background embedding for semantic search. We fire and
+    // forget — failures don't block the kit-ready response.
+    embedInBackground(adminClient, captureId, capture.user_id, rawText).catch(
+      (e) => console.error('embed background failed', e),
+    );
+
     return json({ ok: true, captureId, deckId });
   } catch (e) {
     console.error('generate-kit failed', e);
@@ -225,6 +247,50 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+async function embedInBackground(
+  client: ReturnType<typeof createClient>,
+  captureId: string,
+  userId: string,
+  text: string,
+): Promise<void> {
+  if (!text || text.length < 20) return;
+  const hash = await sha256Hex(text);
+
+  const { data: existing } = await client
+    .from('embeddings')
+    .select('id, content_hash')
+    .eq('owner_table', 'captures')
+    .eq('owner_id', captureId)
+    .maybeSingle();
+
+  if (existing?.content_hash === hash) return;
+
+  let vec: number[];
+  try {
+    vec = await geminiEmbed(text);
+  } catch (e) {
+    console.error('embed call failed', e);
+    return;
+  }
+  if (!vec.length) return;
+
+  if (existing) {
+    await client
+      .from('embeddings')
+      .update({ embedding: vec, content_hash: hash, content: text })
+      .eq('id', existing.id);
+  } else {
+    await client.from('embeddings').insert({
+      user_id: userId,
+      owner_table: 'captures',
+      owner_id: captureId,
+      content: text,
+      content_hash: hash,
+      embedding: vec,
+    });
+  }
 }
 
 async function markFailed(

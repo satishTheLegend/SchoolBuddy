@@ -138,11 +138,23 @@ export class MockBillingClient implements BillingClient {
 }
 
 // ---------------------------------------------------------------------------
-// Singleton.
-// TODO(revenuecat): replace with `new RevenueCatBillingClient(apiKey)` once
-// `react-native-purchases` is wired up in app/_layout.tsx (Purchases.configure)
-// and entitlement identifiers ("pro", "student") are configured in the RC
-// dashboard.
+// Singleton. Uses the real RevenueCat client when EXPO_PUBLIC_REVENUECAT_API_KEY_*
+// is set AND `react-native-purchases` is installed; otherwise falls back to
+// the mock so the paywall UI is always testable in dev.
 // ---------------------------------------------------------------------------
 
-export const billing: BillingClient = new MockBillingClient();
+function makeBillingClient(): BillingClient {
+  try {
+    const iosKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_IOS;
+    const androidKey = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY_ANDROID;
+    if (!iosKey && !androidKey) return new MockBillingClient();
+    // Late require so a missing native module doesn't break the bundle.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require('./billing-revenuecat');
+    return new mod.RevenueCatBillingClient();
+  } catch {
+    return new MockBillingClient();
+  }
+}
+
+export const billing: BillingClient = makeBillingClient();

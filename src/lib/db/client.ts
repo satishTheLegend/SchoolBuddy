@@ -31,6 +31,7 @@ export async function initDb(): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS cards (
       id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL DEFAULT '',
       deck_id TEXT NOT NULL,
       capture_id TEXT,
       front TEXT NOT NULL,
@@ -50,6 +51,7 @@ export async function initDb(): Promise<void> {
       dirty INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS cards_deck_idx ON cards(deck_id);
+    CREATE INDEX IF NOT EXISTS cards_user_idx ON cards(user_id);
     CREATE INDEX IF NOT EXISTS cards_due_idx ON cards(due_at) WHERE suspended = 0;
 
     CREATE TABLE IF NOT EXISTS reviews_queue (
@@ -118,11 +120,11 @@ export async function getDueCards(
   const db = getDb();
   const now = new Date().toISOString();
   const sql = deckId
-    ? `SELECT * FROM cards WHERE deck_id = ? AND due_at <= ? AND suspended = 0
+    ? `SELECT * FROM cards WHERE user_id = ? AND deck_id = ? AND due_at <= ? AND suspended = 0
        ORDER BY due_at ASC LIMIT ?`
-    : `SELECT * FROM cards WHERE due_at <= ? AND suspended = 0
+    : `SELECT * FROM cards WHERE user_id = ? AND due_at <= ? AND suspended = 0
        ORDER BY due_at ASC LIMIT ?`;
-  const args = deckId ? [deckId, now, limit] : [now, limit];
+  const args = deckId ? [userId, deckId, now, limit] : [userId, now, limit];
   const rows = await db.getAllAsync<CardRow>(sql, args);
   return rows.map((r) => rowToCard(r, userId));
 }
@@ -133,23 +135,26 @@ export async function getDeckCards(
 ): Promise<Card[]> {
   const db = getDb();
   const rows = await db.getAllAsync<CardRow>(
-    `SELECT * FROM cards WHERE deck_id = ? ORDER BY created_at DESC`,
-    [deckId],
+    `SELECT * FROM cards WHERE user_id = ? AND deck_id = ? ORDER BY created_at DESC`,
+    [userId, deckId],
   );
   return rows.map((r) => rowToCard(r, userId));
 }
 
-export async function countDue(deckId: string | null): Promise<number> {
+export async function countDue(
+  userId: string,
+  deckId: string | null,
+): Promise<number> {
   const db = getDb();
   const now = new Date().toISOString();
   const row = deckId
     ? await db.getFirstAsync<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM cards WHERE deck_id = ? AND due_at <= ? AND suspended = 0`,
-        [deckId, now],
+        `SELECT COUNT(*) AS n FROM cards WHERE user_id = ? AND deck_id = ? AND due_at <= ? AND suspended = 0`,
+        [userId, deckId, now],
       )
     : await db.getFirstAsync<{ n: number }>(
-        `SELECT COUNT(*) AS n FROM cards WHERE due_at <= ? AND suspended = 0`,
-        [now],
+        `SELECT COUNT(*) AS n FROM cards WHERE user_id = ? AND due_at <= ? AND suspended = 0`,
+        [userId, now],
       );
   return row?.n ?? 0;
 }
@@ -158,12 +163,13 @@ export async function upsertCard(card: Card, markDirty = false): Promise<void> {
   const db = getDb();
   await db.runAsync(
     `INSERT INTO cards (
-      id, deck_id, capture_id, front, back, type,
+      id, user_id, deck_id, capture_id, front, back, type,
       stability, difficulty, due_at, last_reviewed_at,
       reps, lapses, state, suspended, starred,
       created_at, updated_at, dirty
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET
+      user_id=excluded.user_id,
       deck_id=excluded.deck_id,
       front=excluded.front,
       back=excluded.back,
@@ -180,6 +186,7 @@ export async function upsertCard(card: Card, markDirty = false): Promise<void> {
       dirty=MAX(cards.dirty, excluded.dirty)`,
     [
       card.id,
+      card.userId,
       card.deckId,
       card.captureId,
       card.front,

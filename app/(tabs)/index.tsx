@@ -24,7 +24,7 @@ export default function TodayScreen() {
     setRefreshing(true);
     try {
       await fullSync(user.id);
-      const [n, s] = await Promise.all([countDue(null), getStreak()]);
+      const [n, s] = await Promise.all([countDue(user.id, null), getStreak()]);
       setDueCount(n);
       setStreak(s.count);
     } catch (e) {

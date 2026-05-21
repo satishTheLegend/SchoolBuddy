@@ -3,6 +3,7 @@ import { Card } from '@/types';
 import { getDueCards, recordReview, upsertCard } from '@/lib/db/client';
 import { ensureFreshCards } from '@/lib/db/scoped-sync';
 import { recordReviewToday } from '@/lib/streak';
+import { track } from '@/lib/analytics';
 import {
   DEFAULT_PARAMETERS,
   FsrsCard,
@@ -85,9 +86,13 @@ export const useReview = create<ReviewState>((set, get) => ({
     };
 
     await upsertCard(updated, true);
-    // Best-effort streak update — same-day reviews no-op so it's safe
-    // to call on every rating.
     recordReviewToday().catch(() => {});
+    track('card_rated', {
+      rating,
+      stability: nextFsrs.stability,
+      lapses: nextFsrs.lapses,
+      state: nextFsrs.state,
+    });
     await recordReview({
       cardId: current.id,
       rating,

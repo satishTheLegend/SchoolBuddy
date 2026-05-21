@@ -29,6 +29,7 @@ export default function CaptureDetail() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [summaryMode, setSummaryMode] = useState<'bullets' | 'paragraph'>('bullets');
 
   // Load initial state
   useEffect(() => {
@@ -129,10 +130,22 @@ export default function CaptureDetail() {
       <ScrollView contentContainerClassName="px-4 pb-12 gap-4">
         {/* Summary */}
         <Card>
-          <CardTitle>Summary</CardTitle>
+          <View className="flex-row items-center justify-between">
+            <CardTitle>Summary</CardTitle>
+            {summary && (
+              <Pressable
+                onPress={() => setSummaryMode((m) => (m === 'bullets' ? 'paragraph' : 'bullets'))}
+                className="bg-bg-elevated rounded-full px-3 py-1"
+              >
+                <Text className="text-ink-muted text-xs">
+                  {summaryMode === 'bullets' ? 'Paragraph' : 'Bullets'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
           {summary ? (
             <Text className="text-ink text-base leading-6 mt-2">
-              {summary.content}
+              {summaryMode === 'paragraph' ? summary.content.replace(/^[-*•]\s*/gm, '') : summary.content}
             </Text>
           ) : (
             <PendingRow label="Reading your notes..." />

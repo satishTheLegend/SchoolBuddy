@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1242 2436">
+  <rect width="1242" height="2436" fill="#0B0F19"/>
+  <g transform="translate(411 1018)">
+    <rect width="420" height="420" rx="100" fill="#7C5CFF"/>
+    <rect x="86" y="100" width="248" height="170" rx="22" fill="#F4F6FB"/>
+    <circle cx="210" cy="210" r="42" fill="#0B0F19"/>
+    <circle cx="210" cy="210" r="20" fill="#F4F6FB"/>
+  </g>
+  <text x="621" y="1530" text-anchor="middle" fill="#F4F6FB" font-family="-apple-system, system-ui, sans-serif" font-size="64" font-weight="700">SnapStudy</text>
+  <text x="621" y="1580" text-anchor="middle" fill="#8C97B5" font-family="-apple-system, system-ui, sans-serif" font-size="28">Snap. Learn. Remember.</text>
+</svg>
